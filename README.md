@@ -9,12 +9,12 @@ AI-powered dynamic pricing microservice for Airbnb listings across Moroccan citi
 
 ## Overview
 
-This API delivers real-time price predictions for short-term rental properties in Morocco's major cities. Built with **FastAPI** and powered by a **Random Forest** machine learning model achieving **55.33 MAD mean absolute error** (~$5.50 USD).
+This API delivers real-time price predictions for short-term rental properties in Morocco's major cities. Built with **FastAPI** and powered by a **Random Forest** machine learning model achieving **84.59 MAD mean absolute error** (~$8.46 USD).
 
 ### Key Features
 
 - **Fast Predictions**: Single prediction <50ms, batch processing up to 100 listings
-- **High Accuracy**: MAE of 55.33 MAD with R² of 0.5499
+- **High Accuracy**: MAE of 84.59 MAD with R² of 0.8586
 - **Multi-City Support**: Casablanca, Marrakech, Agadir, Rabat, Fes, Tangier
 - **Seasonal Intelligence**: Dynamic pricing for different seasons
 - **Production Ready**: Docker deployment, CI/CD pipeline, comprehensive tests
@@ -73,28 +73,29 @@ Access the interactive API docs at: **http://localhost:8000/docs**
 
 ## Model Performance
 
-### Model v2.0 - XGBoost (Current)
+### Model v2.0 - Random Forest (Current)
 
 | Metric | Value | Description |
 |--------|-------|-------------|
-| **MAE** | 56.01 MAD | Mean Absolute Error (~$5.60 USD) |
-| **RMSE** | 71.33 MAD | Root Mean Squared Error |
-| **R²** | 0.5556 | Explains 55.56% of price variance |
+| **MAE** | 84.59 MAD | Mean Absolute Error (~$8.46 USD) |
+| **RMSE** | 172.22 MAD | Root Mean Squared Error |
+| **R²** | 0.8586 | Explains 85.86% of price variance |
 | **Train Size** | 1,324 listings | 80% split |
 | **Test Size** | 332 listings | 20% split |
-| **Model Size** | 217 KB | Lightweight deployment |
+| **Model Size** | 94.55 MB (compressed) | `random_forest_tuned.pkl.gz` artifact |
 
 ### Model Comparison (Training Phase)
 
-We evaluated 3 candidate models:
+We evaluated 4 candidate models:
 
 | Model | Test MAE | Test RMSE | Test R² | Rank |
 |-------|----------|-----------|---------|------|
-| **XGBoost** ⭐ | 56.01 | **71.33** | **0.5556** | 🥇 |
-| RandomForest | **55.33** | 71.79 | 0.5499 | 🥈 |
-| GradientBoosting | 56.32 | 72.03 | 0.5468 | 🥉 |
+| **Random Forest** ⭐ | **84.59** | **172.22** | **0.8586** | 🥇 |
+| XGBoost | 151.78 | 237.05 | 0.7322 | 🥈 |
+| Linear Regression | 237.51 | 351.24 | 0.4120 | 🥉 |
+| Ridge Regression | 238.26 | 352.00 | 0.4095 | 4th |
 
-**Champion Model**: XGBoost selected for best R² (0.5556) and RMSE (71.33) - explains the most variance and handles outliers best. While RandomForest has slightly lower MAE (0.68 MAD difference = $0.07 USD), XGBoost wins on 2 out of 3 metrics.
+**Champion Model**: Random Forest selected for best performance on all three test metrics (MAE, RMSE, and R²) based on the current training artifacts.
 
 ---
 
@@ -112,8 +113,8 @@ Returns service health status and model metrics.
   "status": "healthy",
   "model_loaded": true,
   "model_version": "2.0",
-  "model_mae": 55.33,
-  "model_r2": 0.5499,
+  "model_mae": 84.59,
+  "model_r2": 0.8586,
   "timestamp": "2025-11-21T19:45:00Z"
 }
 ```
@@ -304,9 +305,9 @@ Located in `notebooks/pricing_model_training.ipynb`:
 1. **Feature Selection**: 12 predictive features
 2. **Preprocessing**: StandardScaler + OneHotEncoder pipeline
 3. **Model Training**: GridSearchCV with 5-fold cross-validation
-4. **Model Comparison**: 3 algorithms evaluated
-5. **Model Selection**: XGBoost chosen as champion (best R² and RMSE)
-6. **Model Persistence**: Saved to `models/pricing_model_xgboost.pkl`
+4. **Model Comparison**: 4 algorithms evaluated
+5. **Model Selection**: Random Forest chosen as champion on current test metrics
+6. **Model Persistence**: Saved to `models/production/random_forest_tuned.pkl.gz`
 
 ---
 
@@ -354,7 +355,7 @@ The project includes a complete Jenkins pipeline with the following stages:
 
 ```bash
 # Optional: Override model path
-MODEL_PATH=/app/models/pricing_model_xgboost.pkl
+MODEL_PATH=/app/models/production/random_forest_tuned.pkl.gz
 
 # Optional: Set log level
 LOG_LEVEL=info
@@ -385,8 +386,10 @@ pricing-model-api/
 │   ├── requirements.txt               # Python dependencies
 │   └── test_api.py                    # API tests
 ├── models/
-│   ├── pricing_model_xgboost.pkl           # Trained model (217 KB)
-│   └── pricing_model_xgboost_metadata.pkl  # Model metadata
+│   ├── production/
+│   │   └── random_forest_tuned.pkl.gz      # Trained model (~94.55 MB compressed)
+│   ├── model_comparison.csv                # Training metrics summary
+│   └── rf_feature_importance.csv           # Random Forest feature importances
 ├── notebooks/
 │   ├── airbnb_pricing_pipeline.ipynb  # ETL pipeline
 │   └── pricing_model_training.ipynb   # Model training
@@ -403,10 +406,10 @@ pricing-model-api/
 - **Validation**: Pydantic v2
 
 ### Machine Learning
-- **Algorithm**: XGBoostRegressor
-- **Library**: xgboost 3.1.2, scikit-learn 1.7.2
-- **Model Size**: 217 KB
-- **Preprocessing**: ColumnTransformer (StandardScaler + OneHotEncoder)
+- **Algorithm**: RandomForestRegressor
+- **Library**: scikit-learn 1.7.2
+- **Model Size**: 94.55 MB (compressed)
+- **Feature Space**: 44 engineered features
 
 ### Data Processing
 - **pandas** 2.3.3 - Data manipulation
@@ -469,11 +472,10 @@ pricing-model-api/
 **Solution**: 
 ```bash
 # Ensure model files exist
-ls -lh models/
+ls -lh models/production/
 
 # Should see:
-# pricing_model_xgboost.pkl (217 KB)
-# pricing_model_xgboost_metadata.pkl (409 bytes)
+# random_forest_tuned.pkl.gz (~95 MB)
 ```
 
 ### Container Health Check Failing
